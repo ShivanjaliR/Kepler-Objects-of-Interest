@@ -418,3 +418,111 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=40, b=0)
 )
 st.plotly_chart(fig, use_container_width=True)
+
+# === 🌌 Celestial Globe: All Known Exoplanets (Attractive Interactive Section) ===
+st.markdown("## 🌍 Celestial Globe: Explore All Known Exoplanets")
+
+# Load datasets
+df_koi = pd.read_csv(inputfile)
+df_k2 = pd.read_csv(k2_pandc_input_file)
+df_toi = pd.read_csv(toi_input_file)
+
+# Prepare KOI data
+koi_points = df_koi.dropna(subset=["ra", "dec", "koi_prad"]).copy()
+koi_points["radius"] = koi_points["koi_prad"]
+koi_points["source"] = "Kepler (KOI)"
+
+# Prepare K2 data
+k2_points = df_k2.dropna(subset=["ra", "dec", "pl_rade"]).copy()
+k2_points["radius"] = k2_points["pl_rade"]
+k2_points["source"] = "K2"
+
+# Prepare TOI data
+toi_points = df_toi.dropna(subset=["ra", "dec", "pl_rade"]).copy()
+toi_points["radius"] = toi_points["pl_rade"]
+toi_points["source"] = "TESS (TOI)"
+
+# Merge all datasets
+df_all = pd.concat(
+    [
+        koi_points[["ra", "dec", "radius", "source"]],
+        k2_points[["ra", "dec", "radius", "source"]],
+        toi_points[["ra", "dec", "radius", "source"]],
+    ],
+    ignore_index=True
+)
+
+# Convert RA/DEC to lon/lat for celestial plotting
+df_all["lon"] = df_all["ra"]
+df_all["lat"] = df_all["dec"]
+
+# Streamlit interactive controls
+selected_datasets = st.multiselect(
+    "🪐 Select Dataset(s) to Display:",
+    ["Kepler (KOI)", "K2", "TESS (TOI)"],
+    default=["Kepler (KOI)", "K2", "TESS (TOI)"]
+)
+rot_lon = st.slider("🌐 Rotate Longitude", 0, 360, 0)
+rot_lat = st.slider("📐 Rotate Latitude", -90, 90, 0)
+
+# Filter by selection
+df_filtered = df_all[df_all["source"].isin(selected_datasets)]
+
+# Define distinct colors for datasets
+dataset_colors = {
+    "Kepler (KOI)": "gold",
+    "K2": "deeppink",
+    "TESS (TOI)": "limegreen"
+}
+
+# Build figure
+fig_globe = go.Figure()
+
+for src, group in df_filtered.groupby("source"):
+    fig_globe.add_trace(go.Scattergeo(
+        lon=group["lon"],
+        lat=group["lat"],
+        text=[
+            f"{src}<br>RA: {ra:.2f}°<br>Dec: {dec:.2f}°<br>Radius: {r:.2f} Earth radii"
+            for ra, dec, r in zip(group["lon"], group["lat"], group["radius"])
+        ],
+        name=src,
+        mode="markers",
+        marker=dict(
+            size=np.clip(group["radius"], 3, 12),
+            color=dataset_colors.get(src, "white"),
+            opacity=0.8,
+            line=dict(width=0.5, color="black"),
+        ),
+        hoverinfo="text"
+    ))
+
+# Update layout for a "space" look and centered legend
+fig_globe.update_layout(
+    geo=dict(
+        projection=dict(type="orthographic", rotation=dict(lon=rot_lon, lat=rot_lat)),
+        showland=True,
+        landcolor="rgb(10,10,25)",
+        showocean=True,
+        oceancolor="rgb(5,5,50)",
+        showcountries=False,
+        showcoastlines=False,
+        showframe=False,
+        bgcolor="black",
+    ),
+    paper_bgcolor="black",
+    plot_bgcolor="black",
+    margin=dict(l=0, r=0, t=0, b=0),
+    legend=dict(
+        orientation="h",
+        x=0.5,
+        y=-0.1,
+        xanchor="center",
+        yanchor="top",
+        bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white", size=12)
+    ),
+)
+
+# Display the Plotly globe
+st.plotly_chart(fig_globe, use_container_width=True)
